@@ -65,14 +65,15 @@ lines:          .word   2       start_pos       end_pos
 start_pos:      .word   2       100
 end_pos:        .word   2       100
 
+.align 4
 canvas: 	.word   0       0       0       canv
-canv:   	.space  2000
+canv:   	.space  16384
 
 solution:       .word   2       counts
 counts:         .space  16
 
 puzzle:  	.word	canvas	lines	data
-data:		.space	1024
+data:		.space	300
 
 .align 2
 asteroid_map: .space 1024
@@ -120,7 +121,7 @@ not_frozen:
 	la	$t4, puzzle_ready
 	lw	$t3, 0($t4)
 	bne	$t3, 1, not_puzzle
-        sw	$t3, 0($t4)
+        sw	$0, 0($t4)
 	move	$a0, $t0 				#a0 = puzzle, a2 = solution
 	la	$a2, solution
 	jal	count_disjoint_regions
@@ -251,14 +252,14 @@ count_disjoint_regions:
         sw      $s5, 24($sp)
         sw      $s6, 28($sp)
         sw      $s7, 32($sp)
-        move    $s0, $a0        # s0 = lines
-        move    $s1, $a1        # s1 = canvas
+        move    $s0, $a0        # s0 = puzzle
+	move    $s1, $a1        # s1 = nothing
         move    $s2, $a2        # s2 = solution
 
-        lw      $s4, 0($s0)     # s4 = lines->num_lines
+        lw      $s4, 16($s0)     # s4 = lines->num_lines
         li      $s5, 0          # s5 = i
-        lw      $s6, 4($s0)     # s6 = lines->coords[0]
-        lw      $s7, 8($s0)     # s7 = lines->coords[1]
+        lw      $s6, 20($s0)     # s6 = lines->coords[0]
+        lw      $s7, 24($s0)     # s7 = lines->coords[1]
 forcdr_loop:
         bgeu    $s5, $s4, endcdr_for
         mul     $t2, $s5, 4     # t2 = i*4
@@ -266,14 +267,14 @@ forcdr_loop:
         lw      $a0, 0($t3)     # a0 = start_pos = lines->coords[0][i]
         add     $t4, $s7, $t2   # t4 = &lines->coords[1][i]
         lw      $a1, 0($t4)     # a1 = end_pos = lines->coords[1][i]
-        move    $a2, $s1
+        move    $a2, $s0	#a2 = puzzle
         jal     draw_line
 
         li      $t9, 2
         div     $s5, $t9
         mfhi    $t6             # t6 = i % 2
         addi    $a0, $t6, 65    # a0 = 'A' + (i % 2)
-        move    $a1, $s1        # count_disjoint_regions_step('A' + (i % 2), canvas)
+        move    $a1, $s0        # count_disjoint_regions_step('A' + (i % 2), puzzle)
         jal     count_disjoint_regions_step                # v0 = count
         lw      $t6, 4($s2)     # t6 = solution->counts
         mul     $t7, $s5, 4
@@ -402,7 +403,7 @@ flood_fill:
         move    $s0, $a0                # $s0 = row
         move    $s1, $a1                # $s1 = col
         move    $s2, $a2                # $s2 = marker
-        move    $s3, $a3                # $s3 = canvas
+        move    $s3, $a3                # $s3 = puzzle
         blt     $s0, $0, ff_return      # row < 0
         blt     $s1, $0, ff_return      # col < 0
         lw      $t0, 0($s3)             # $t0 = canvas->height
@@ -619,7 +620,7 @@ solve_puzzle:
 	la	$t0, puzzle_ready
 	li	$t1, 1
 	sw	$t1, 0($t0)
-        j   interrupt_dispatch
+    j   interrupt_dispatch
 
 non_intrpt:				# was some non-interrupt
 	li	$v0, PRINT_STRING
