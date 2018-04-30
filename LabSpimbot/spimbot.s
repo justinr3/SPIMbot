@@ -113,7 +113,7 @@ main:
         la      $t0, puzzle
         lw      $a0, 0($t0)
 		jal	solve_unfreeze
-	
+
 not_frozen:
         lw      $t0, GET_ENERGY
         li      $t1, 500
@@ -346,70 +346,67 @@ end_for:
 ################################################################################
 
 count_disjoint_regions_step:
-        sub	$sp, $sp, 28                    # allocate 28 byte stack frame
-        sw	$ra, 0($sp)
+        sub     $sp, $sp, 36
+        sw      $ra, 0($sp)
         sw      $s0, 4($sp)
         sw      $s1, 8($sp)
         sw      $s2, 12($sp)
         sw      $s3, 16($sp)
         sw      $s4, 20($sp)
         sw      $s5, 24($sp)
+        sw      $s6, 28($sp)
+        sw      $s7, 32($sp)
 
-        move    $s0, $a0                        # save marker
-        move    $s1, $a1                        # save puzzle
+        move    $s0, $a0
+        move    $s1, $a1
 
-        li      $s3, 0                          # unsigned int region_count = 0;
+        li      $s2, 0                  # $s2 = region_count
+        li      $s3, 0                  # $s3 = row
+        lw      $s4, 0($s1)             # $s4 = canvas->height
+        lw      $s6, 4($s1)             # $s6 = canvas->width
+        lw      $s7, 8($s1)             # canvas->pattern
 
-        li      $s4, 0                          # int row = 0
+cdrs_outer_for_loop:
+        bge     $s3, $s4, cdrs_outer_end
+        li      $s5, 0                  # $s5 = col
 
-cdrs_for_outer:
-        li      $s5, 0                          # int col = 0
-        lw      $t0, 4($s1)                     # load canvas->width
-        bge     $s4, $t0, cdrs_end_outer        # branch if !(col < canvas->width)
-
-cdrs_for_inner:
-        lw      $t0, 0($s1)                     # load canvas->height
-        bge     $s5, $t0, cdrs_end_inner        # branch if !(row < canvas->height)
-        lw      $t2, 12($s1)                    # canvas->canvas
-        li      $t3, 4
-        mult    $s4, $t3
-        mflo    $t3
-        add     $t2, $t2, $t3                   # &canvas->canvas[row]
-        lw      $t2, 0($t2)                     # load canvas->canvas[row]
-        add     $t2, $t2, $s5                   # &canvas->canvas[row][col]
-        lb      $s2, 0($t2)                     # curr = canvas->canvas[row][col]
-
-        lb      $t4, 8($s1)                     # load pattern
-        beq     $s2, $t4, cdrs_exit_if          # branch if (curr == canvas->pattern)
-        beq     $s2, $s0, cdrs_exit_if          # branch if (curr == marker)
-
-        add     $s3, $s3, 1                     # region_count ++;
-
-        move    $a0, $s4
+cdrs_inner_for_loop:
+        bge     $s5, $s6, cdrs_inner_end
+        lw      $t0, 12($s1)            # canvas->canvas
+        mul     $t5, $s3, 4             # row * 4
+        add     $t5, $t0, $t5           # &canvas->canvas[row]
+        lw      $t0, 0($t5)             # canvas->canvas[row]
+        add     $t0, $t0, $s5           # &canvas->canvas[row][col]
+        lbu     $t0, 0($t0)             # $t0 = canvas->canvas[row][col]
+        beq     $t0, $s7, cdrs_skip_if  # curr_char != canvas->pattern
+        beq     $t0, $s0, cdrs_skip_if  # curr_char != canvas->marker
+        add     $s2, $s2, 1             # region_count++
+        move    $a0, $s3
         move    $a1, $s5
         move    $a2, $s0
         move    $a3, $s1
-        jal     flood_fill                      # flood_fill(row, col, marker, canvas);
+        jal     flood_fill
 
-cdrs_exit_if:
-        add     $s5, $s5, 1                     # col++
-        j       cdrs_for_inner
+cdrs_skip_if:
+        add     $s5, $s5, 1             # col++
+        j       cdrs_inner_for_loop
 
-cdrs_end_inner:
-        add     $s4, $s4, 1                     # row++
-        j       cdrs_for_outer
+cdrs_inner_end:
+        add     $s3, $s3, 1             # row++
+        j       cdrs_outer_for_loop
 
-cdrs_end_outer:
-        move    $v0, $s3                        # return value region_count
-
-        lw	$ra, 0($sp)
+cdrs_outer_end:
+        move    $v0, $s2
+        lw      $ra, 0($sp)
         lw      $s0, 4($sp)
         lw      $s1, 8($sp)
         lw      $s2, 12($sp)
         lw      $s3, 16($sp)
         lw      $s4, 20($sp)
         lw      $s5, 24($sp)
-        add	$sp, $sp, 28
+        lw      $s6, 28($sp)
+        lw      $s7, 32($sp)
+        add     $sp, $sp, 36
         jr      $ra
 
 ################################################################################
