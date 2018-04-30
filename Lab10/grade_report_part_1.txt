@@ -1,0 +1,10 @@
+Grades for version committed on time
+	part 1: 0.0 / 40.0
+			*Partially passed test: mapseed 185 score 0
+			*Partially passed test: mapseed 25 score 0
+			*Partially passed test: mapseed 357 score 0
+			*Partially passed test: mapseed 123456789 score 0
+		
+Total: 0.0 / 40.0
+
+Final Score: 0.0 / 40.0

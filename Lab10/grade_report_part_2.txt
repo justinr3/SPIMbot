@@ -1,0 +1,10 @@
+Grades for version committed on time
+	part 2: 0.0 / 60.0
+			*Failed test: mapseed 512
+			*Failed test: mapseed 3
+			*Failed test: mapseed 23
+			*Failed test: mapseed 123456789
+		
+Total: 0.0 / 60.0
+
+Final Score: 0.0 / 60.0
