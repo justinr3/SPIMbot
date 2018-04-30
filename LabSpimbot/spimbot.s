@@ -78,9 +78,11 @@ data:		.space	300
 asteroid_map: .space 1024
 collect_asteroid: .space 8
 dropoff_asteroids: .space 8
-
+puzzle_ready:	.space 4
+frozen:		.space 4
 
 .text
+
 
 main:
         sub	$sp, $sp, 4                    # allocate 20 byte stack frame
@@ -104,12 +106,44 @@ main:
 	add	$t0, $t0, 50000		# add 50 to current time
 	sw	$t0, TIMER		# request timer interrupt in 50 cycles
 
+		la	$t4, frozen
+		lw	$t3, 0($t4)
+		bne	$t3, 1, not_frozen
+		sw	$0, 0($t4)
+        la      $t0, puzzle
+        lw      $a0, 0($t0)
+		jal	solve_unfreeze
+	
+not_frozen:
         lw      $t0, GET_ENERGY
         li      $t1, 500
         bge     $t0, $t1, not_puzzle
 
         la      $t0, puzzle
         sw      $t0, REQUEST_PUZZLE
+
+		la	$t4, puzzle_ready
+		lw	$t3, 0($t4)
+		bne	$t3, 1, not_puzzle
+	    sw	$0, 0($t4)
+		move	$a0, $t0 				#a0 = puzzle, a2 = solution
+		la	$a2, solution
+		jal	count_disjoint_regions
+		lw	$t1, 4($a2)					#submitting
+		lw	$t2, CHECK_OTHER_FROZEN		#t2 = 1 if other bot frozen
+		beq	$t2, 1, no_throwing
+
+		lw	$t2, SCORES_REQUEST
+		srl	$t3, $t2, 30				#t3 = our score
+		sll $t2, $t2, 30				#t2 = other's score
+		srl $t2, $t2, 30
+		bge	$t3, $t2, no_throwing
+		sw	$a1, THROW_PUZZLE
+
+	no_throwing:
+		sw	$t1, SUBMIT_SOLUTION
+		sw	$0, 0($a2)				#zero solution struct
+		sw	$0, 4($a2)
 
 not_puzzle:
         li	$a0, 10
@@ -197,8 +231,7 @@ solve_unfreeze:
         sw      $a0, 4($sp)
         sw      $a1, 8($sp)
 
-        sw	$a0, 16($a1) 			#a0 = lines, a1 =  canvas, a2 = solution
-        sw	$a1, 0($a1)
+        move	$a0, $a1 			#a0 = puzzle, a2 = solution
         la	$a2, solution
         jal     count_disjoint_regions
         lw	$t0, 4($a2)				#submitting
@@ -223,25 +256,25 @@ count_disjoint_regions:
         sw      $s4, 20($sp)
         sw      $s5, 24($sp)
 
-        move    $s0, $a0                                        # save lines
-        move    $s1, $a1                                        # save canvas
+        move    $s0, $a0                                        # save puzzle
+		lw		$s1, 0($a0)
         lw      $s2, 4($a2)                                     # save solution->count
 
         li      $s3, 0                                          # unsigned int i = 0
 
 cdr_for:
-        lw      $t0, 0($s0)                                     # load lines->num_lines
+        lw      $t0, 16($s0)                                     # load lines->num_lines
         bge     $s3, $t0, cdr_end                               # branch if !(i < lines->num_lines)
 
-        lw      $t1, 4($s0)                                     # load lines->coords[0]
+        lw      $t1, 20($s0)                                     # load lines->coords[0]
         li      $t2, 4
         mult    $s3, $t2
         mflo    $t2
         add     $t2, $t1, $t2                                   # & lines->coords[0][i]
-        lb      $t4, 8($s1)                                     # load canvas->pattern
+        lb      $t4, 8($s0)                                     # load canvas->pattern
         lw      $s4, 0($t2)                                     # load lines->coords[0][i]
 
-        lw      $t1, 8($s0)                                     # load lines->coords[1]
+        lw      $t1, 24($s0)                                     # load lines->coords[1]
         li      $t2, 4
         mult    $s3, $t2
         mflo    $t2
@@ -250,16 +283,16 @@ cdr_for:
 
         move    $a0, $s4
         move    $a1, $s5
-        move    $a2, $s1
-        jal     draw_line                                       # draw_line(start_pos, end_pos, canvas);
+        move    $a2, $s0
+        jal     draw_line                                       # draw_line(start_pos, end_pos, puzzle);
 
         li      $t0, 2
         div     $s3, $t0
         mfhi    $t0                                             # i % 2
 
         add     $a0, $t0, 65
-        move    $a1, $s1
-        jal     count_disjoint_regions_step                     # count = count_disjoint_regions_step('A' + (i % 2), canvas);
+        move    $a1, $s0
+        jal     count_disjoint_regions_step                     # count = count_disjoint_regions_step('A' + (i % 2), puzzle);
 
         li      $t0, 4
         mult    $t0, $s3
@@ -323,7 +356,7 @@ count_disjoint_regions_step:
         sw      $s5, 24($sp)
 
         move    $s0, $a0                        # save marker
-        move    $s1, $a1                        # save canvas
+        move    $s1, $a1                        # save puzzle
 
         li      $s3, 0                          # unsigned int region_count = 0;
 
@@ -567,17 +600,17 @@ interrupt_dispatch:			# Interrupt:
 	and	$a0, $k0, TIMER_INT_MASK	# is there a timer interrupt?
 	bne	$a0, 0, timer_interrupt
 
-        and     $a0, $k0, STATION_ENTER_INT_MASK
-        bne     $a0, 0, station_enter_interrupt
+    and     $a0, $k0, STATION_ENTER_INT_MASK
+    bne     $a0, 0, station_enter_interrupt
 
-        and     $a0, $k0, STATION_EXIT_INT_MASK
-        bne     $a0, 0, station_exit_interrupt
+    and     $a0, $k0, STATION_EXIT_INT_MASK
+    bne     $a0, 0, station_exit_interrupt
 
-        and	$a0, $k0, REQUEST_PUZZLE_INT_MASK
+    and		$a0, $k0, REQUEST_PUZZLE_INT_MASK
 	bne     $a0, 0 solve_puzzle
 
 	and     $a0, $k0, BOT_FREEZE_INT_MASK
-        bne     $a0, 0, unfreeze_bot
+    bne     $a0, 0, unfreeze_bot
 
 	# add dispatch for other interrupt types here.
 
@@ -613,29 +646,17 @@ station_exit_interrupt:
 unfreeze_bot:
 	la	$a1, puzzle
 	sw	$a1, BOT_FREEZE_ACK
-	jal	solve_unfreeze
+	la	$t0, puzzle_ready
+	li	$t1, 1
+	sw	$t1, 0($t0)
 	j	interrupt_dispatch
 
 solve_puzzle:
-	sw	$a0, 16($t0) 			#a0 = lines, a1 =  canvas, a2 = solution
-	sw	$a1, 0($t0)
-	la	$a2, solution
-	jal     count_disjoint_regions
-	lw	$t1, 4($a2)				#submitting
-	lw	$t2, CHECK_OTHER_FROZEN	#t2 = 1 if other bot frozen
-	beq	$t2, 1, no_throwing
-	lw	$t2, SCORES_REQUEST
-	srl	$t3, $t2, 30		#t3 = our score
-	sll     $t2, $t2, 30		#t2 = other's score
-	srl     $t2, $t2, 30
-	bge	$t3, $t2, no_throwing
-	sw	$a1, THROW_PUZZLE
-no_throwing:
-	sw	$t1, SUBMIT_SOLUTION
-	sw	$0, 0($a2)				#zero solution struct
-	sw	$0, 4($a2)
 	sw	$a1, REQUEST_PUZZLE_ACK
-        j       interrupt_dispatch
+	la	$t0, puzzle_ready
+	li	$t1, 1
+	sw	$t1, 0($t0)
+    j   interrupt_dispatch
 
 non_intrpt:				# was some non-interrupt
 	li	$v0, PRINT_STRING
