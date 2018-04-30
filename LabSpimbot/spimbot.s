@@ -62,12 +62,12 @@ PI:	.float	3.141592
 F180:	.float  180.0
 
 lines:          .word   2       start_pos       end_pos
-start_pos:      .word   2       100
-end_pos:        .word   2       100
+start_pos:      .word   2       10
+end_pos:        .word   22     14
 
 .align 4
 canvas: 	.word   0       0       0       canv
-canv:   	.space  16384
+canv:   	.space  1024
 
 solution:       .word   2       counts
 counts:         .space  16
@@ -79,8 +79,8 @@ data:		.space	300
 asteroid_map: .space 1024
 collect_asteroid: .space 8
 dropoff_asteroids: .space 8
-puzzle_ready:	.space 4
-frozen:		.space 4
+puzzle_ready:	.space 8
+frozen:		.space 8
 
 .text
 
