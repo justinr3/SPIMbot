@@ -101,18 +101,13 @@ main:
 	or	$t4, $t4, 1		# global interrupt enable
 	mtc0	$t4, $12		# set interrupt mask (Status register)
 
-        # request timer interrupt
-	lw	$t0, TIMER		# read current time
-	add	$t0, $t0, 50000		# add 50 to current time
-	sw	$t0, TIMER		# request timer interrupt in 50 cycles
-
-		la	$t4, frozen
-		lw	$t3, 0($t4)
-		bne	$t3, 1, not_frozen
-		sw	$0, 0($t4)
+	la	$t4, frozen
+	lw	$t3, 0($t4)
+	bne	$t3, 1, not_frozen
+	sw	$0, 0($t4)
         la      $t0, puzzle
         lw      $a0, 0($t0)
-		jal	solve_unfreeze
+	jal	solve_unfreeze
 
 not_frozen:
         lw      $t0, GET_ENERGY
@@ -122,34 +117,34 @@ not_frozen:
         la      $t0, puzzle
         sw      $t0, REQUEST_PUZZLE
 
-		la	$t4, puzzle_ready
-		lw	$t3, 0($t4)
-		bne	$t3, 1, not_puzzle
-	    sw	$0, 0($t4)
-		move	$a0, $t0 				#a0 = puzzle, a2 = solution
-		la	$a2, solution
-		jal	count_disjoint_regions
-		lw	$t1, 4($a2)					#submitting
-		lw	$t2, CHECK_OTHER_FROZEN		#t2 = 1 if other bot frozen
-		beq	$t2, 1, no_throwing
+	la	$t4, puzzle_ready
+	lw	$t3, 0($t4)
+	bne	$t3, 1, not_puzzle
+        sw	$0, 0($t4)
+	move	$a0, $t0 				#a0 = puzzle, a2 = solution
+	la	$a2, solution
+	jal	count_disjoint_regions
+	lw	$t1, 4($a2)					#submitting
+	lw	$t2, CHECK_OTHER_FROZEN		#t2 = 1 if other bot frozen
+	beq	$t2, 1, no_throwing
 
-		lw	$t2, SCORES_REQUEST
-		srl	$t3, $t2, 30				#t3 = our score
-		sll $t2, $t2, 30				#t2 = other's score
-		srl $t2, $t2, 30
-		bge	$t3, $t2, no_throwing
-		sw	$a1, THROW_PUZZLE
+	lw	$t2, SCORES_REQUEST
+	srl	$t3, $t2, 30				#t3 = our score
+	sll     $t2, $t2, 30				#t2 = other's score
+	srl     $t2, $t2, 30
+	bge	$t3, $t2, no_throwing
+	sw	$a1, THROW_PUZZLE
 
-	no_throwing:
-		sw	$t1, SUBMIT_SOLUTION
-		sw	$0, 0($a2)				#zero solution struct
-		sw	$0, 4($a2)
+no_throwing:
+	sw	$t1, SUBMIT_SOLUTION
+	sw	$0, 0($a2)				#zero solution struct
+	sw	$0, 4($a2)
 
 not_puzzle:
         li	$a0, 10
 	sw	$a0, VELOCITY		# drive
         lw      $t0, BOT_X
-        li      $t1, 50
+        li      $t1, 60
         bge     $t0, $t1, cargo_gt
         li	$t0, 0			# ???
 	sw	$t0, ANGLE		# ???
@@ -185,7 +180,6 @@ no_follow:
         sw	$t0, ANGLE		# ???
         li      $t2, 1
         sw	$t2, ANGLE_CONTROL
-        j       mainl
 
 dropoff:
         la      $t0, dropoff_asteroids
@@ -247,71 +241,58 @@ solve_unfreeze:
 ################################################################################
 
 count_disjoint_regions:
-        sub	$sp, $sp, 28                                    # allocate 28 byte stack frame
-        sw	$ra, 0($sp)
+        sub     $sp, $sp, 36
+        sw      $ra, 0($sp)
         sw      $s0, 4($sp)
         sw      $s1, 8($sp)
         sw      $s2, 12($sp)
         sw      $s3, 16($sp)
         sw      $s4, 20($sp)
         sw      $s5, 24($sp)
+        sw      $s6, 28($sp)
+        sw      $s7, 32($sp)
+        move    $s0, $a0        # s0 = lines
+        move    $s1, $a1        # s1 = canvas
+        move    $s2, $a2        # s2 = solution
 
-        move    $s0, $a0                                        # save puzzle
-		lw		$s1, 0($a0)
-        lw      $s2, 4($a2)                                     # save solution->count
+        lw      $s4, 0($s0)     # s4 = lines->num_lines
+        li      $s5, 0          # s5 = i
+        lw      $s6, 4($s0)     # s6 = lines->coords[0]
+        lw      $s7, 8($s0)     # s7 = lines->coords[1]
+forcdr_loop:
+        bgeu    $s5, $s4, endcdr_for
+        mul     $t2, $s5, 4     # t2 = i*4
+        add     $t3, $s6, $t2   # t3 = &lines->coords[0][i]
+        lw      $a0, 0($t3)     # a0 = start_pos = lines->coords[0][i]
+        add     $t4, $s7, $t2   # t4 = &lines->coords[1][i]
+        lw      $a1, 0($t4)     # a1 = end_pos = lines->coords[1][i]
+        move    $a2, $s1
+        jal     draw_line
 
-        li      $s3, 0                                          # unsigned int i = 0
+        li      $t9, 2
+        div     $s5, $t9
+        mfhi    $t6             # t6 = i % 2
+        addi    $a0, $t6, 65    # a0 = 'A' + (i % 2)
+        move    $a1, $s1        # count_disjoint_regions_step('A' + (i % 2), canvas)
+        jal     count_disjoint_regions_step                # v0 = count
+        lw      $t6, 4($s2)     # t6 = solution->counts
+        mul     $t7, $s5, 4
+        add     $t7, $t7, $t6   # t7 = &solution->counts[i]
+        sw      $v0, 0($t7)     # solution->counts[i] = count
+        addi    $s5, $s5, 1     # i++
+        j       forcdr_loop
 
-cdr_for:
-        lw      $t0, 16($s0)                                     # load lines->num_lines
-        bge     $s3, $t0, cdr_end                               # branch if !(i < lines->num_lines)
-
-        lw      $t1, 20($s0)                                     # load lines->coords[0]
-        li      $t2, 4
-        mult    $s3, $t2
-        mflo    $t2
-        add     $t2, $t1, $t2                                   # & lines->coords[0][i]
-        lb      $t4, 8($s0)                                     # load canvas->pattern
-        lw      $s4, 0($t2)                                     # load lines->coords[0][i]
-
-        lw      $t1, 24($s0)                                     # load lines->coords[1]
-        li      $t2, 4
-        mult    $s3, $t2
-        mflo    $t2
-        add     $t2, $t1, $t2                                   # & lines->coords[1][i]
-        lw      $s5, 0($t2)                                     # load lines->coords[1][i]
-
-        move    $a0, $s4
-        move    $a1, $s5
-        move    $a2, $s0
-        jal     draw_line                                       # draw_line(start_pos, end_pos, puzzle);
-
-        li      $t0, 2
-        div     $s3, $t0
-        mfhi    $t0                                             # i % 2
-
-        add     $a0, $t0, 65
-        move    $a1, $s0
-        jal     count_disjoint_regions_step                     # count = count_disjoint_regions_step('A' + (i % 2), puzzle);
-
-        li      $t0, 4
-        mult    $t0, $s3
-        mflo    $t0
-        add     $t0, $t0, $s2
-        sw      $v0, 0($t0)                                     # solution->counts[i] = count;
-
-        add     $s3, 1                                          # i++
-        j       cdr_for
-
-cdr_end:
-        lw	$ra, 0($sp)
+endcdr_for:
+        lw      $ra, 0($sp)
         lw      $s0, 4($sp)
         lw      $s1, 8($sp)
         lw      $s2, 12($sp)
         lw      $s3, 16($sp)
         lw      $s4, 20($sp)
         lw      $s5, 24($sp)
-        add	$sp, $sp, 28
+        lw      $s6, 28($sp)
+        lw      $s7, 32($sp)
+        add     $sp, $sp, 36
         jr      $ra
 
 ################################################################################
@@ -332,7 +313,7 @@ for_loop:
         div     $t3, $t0        #
         mfhi    $t7             # t7 = pos % width
         mflo    $t8             # t8 = pos / width
-        mul     $t9, $t8, 4		  # t9 = pos/width*4
+        mul     $t9, $t8, 4		# t9 = pos/width*4
         add     $t9, $t9, $t5   # t9 = &canvas->canvas[pos / width]
         lw      $t9, 0($t9)     # t9 = canvas->canvas[pos / width]
         add     $t9, $t9, $t7
@@ -412,73 +393,58 @@ cdrs_outer_end:
 ################################################################################
 
 flood_fill:
-        sub	$sp, $sp, 20                    # allocate 20 byte stack frame
-        sw	$ra, 0($sp)
+        sub     $sp, $sp, 20
+        sw      $ra, 0($sp)
         sw      $s0, 4($sp)
         sw      $s1, 8($sp)
         sw      $s2, 12($sp)
         sw      $s3, 16($sp)
+        move    $s0, $a0                # $s0 = row
+        move    $s1, $a1                # $s1 = col
+        move    $s2, $a2                # $s2 = marker
+        move    $s3, $a3                # $s3 = canvas
+        blt     $s0, $0, ff_return      # row < 0
+        blt     $s1, $0, ff_return      # col < 0
+        lw      $t0, 0($s3)             # $t0 = canvas->height
+        bge     $s0, $t0, ff_return     # row >= canvas->height
+        lw      $t0, 4($s3)             # $t0 = canvas->width
+        bge     $s1, $t0, ff_return     # col >= canvas->width
 
-        blt     $a0, $0, ff_ret_skip            # branch if (row < 0)
-        blt     $a1, $0, ff_ret_skip            # branch if (col < 0)
-        lw      $t0, 0($a3)
-        lw      $t1, 4($a3)
+        lw      $t0, 12($s3)            # canvas->canvas
+        mul     $t1, $s0, 4
+        add     $t0, $t1, $t0           # $t0 = &canvas->canvas[row]
+        lw      $t0, 0($t0)             # canvas->canvas[row]
+        add     $t1, $s1, $t0           # $t1 = &canvas->canvas[row][col]
+        lbu     $t0, 0($t1)             # $t0 = curr = canvas->canvas[row][col]
+        lbu     $t2, 8($s3)             # $t2 = canvas->pattern
+        beq     $t0, $t2, ff_return     # curr == canvas->pattern
+        beq     $t0, $s2, ff_return     # curr == marker
 
-        bge     $a0, $t0, ff_ret_skip           # branch if (row >= canvas->height)
-        bge     $a1, $t1, ff_ret_skip           # branch if (col >= canvas->width)
-
-        move    $s0, $a0                        # save row
-        move    $s1, $a1                        # save column
-        move    $s2, $a2                        # save marker
-        move    $s3, $a3                        # save canvas
-
-        lw      $t2, 12($s3)                    # canvas->canvas
-        li      $t3, 4
-        mult    $s0, $t3
-        mflo    $t3
-        add     $t2, $t2, $t3                   # &canvas->canvas[row]
-        lw      $t2, 0($t2)                     # load canvas->canvas[row]
-        add     $t2, $t2, $s1                   # &canvas->canvas[row][col]
-        lb      $t3, 0($t2)                     # curr = canvas->canvas[row][col]
-
-        lb      $t4, 8($s3)                     # load pattern
-        beq     $t3, $t4, ff_ret                # branch if (curr == canvas->pattern)
-        beq     $t3, $s2, ff_ret                # branch if (curr == marker)
-
-        sb      $s2, 0($t2)                     # canvas->canvas[row][col] = marker
-
-        sub     $a0, $s0, 1
-        move    $a1, $s1
-        move    $a2, $s2
-        move    $a3, $s3
-        jal     flood_fill                      # flood_fill(row - 1, col, marker, canvas)
-
+        sb      $s2, 0($t1)             # canvas->canvas[row][col] = marker
+        sub     $a0, $s0, 1             # $a0 = row - 1
+        jal     flood_fill              # flood_fill(row - 1, col, marker, canvas);
         move    $a0, $s0
         add     $a1, $s1, 1
         move    $a2, $s2
         move    $a3, $s3
-        jal     flood_fill                      # flood_fill(row, col + 1, marker, canvas)
-
+        jal     flood_fill              # flood_fill(row, col + 1, marker, canvas);
         add     $a0, $s0, 1
         move    $a1, $s1
         move    $a2, $s2
         move    $a3, $s3
-        jal     flood_fill                      # flood_fill(row + 1, col, marker, canvas)
-
+        jal     flood_fill              # flood_fill(row + 1, col, marker, canvas);
         move    $a0, $s0
         sub     $a1, $s1, 1
         move    $a2, $s2
         move    $a3, $s3
-        jal     flood_fill                      # flood_fill(row, col - 1, marker, canvas)
+        jal     flood_fill              # flood_fill(row, col - 1, marker, canvas);
 
-ff_ret:
-        lw	$ra, 0($sp)
+ff_return:
+        lw      $ra, 0($sp)
         lw      $s0, 4($sp)
         lw      $s1, 8($sp)
         lw      $s2, 12($sp)
         lw      $s3, 16($sp)
-
-ff_ret_skip:
         add     $sp, $sp, 20
         jr      $ra
 
@@ -674,4 +640,4 @@ done:
 .set noat
 	move	$at, $k1		# Restore $at
 .set at
-	eret
+eret
