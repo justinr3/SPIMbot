@@ -72,7 +72,7 @@ solution:       .word   2       counts
 counts:         .space  8
 
 puzzle:  	.word	canvas	lines	data
-data:		.space	300
+data:		.space	1024
 
 .align 2
 asteroid_map: .space 1024
@@ -120,7 +120,7 @@ not_frozen:
 	la	$t4, puzzle_ready
 	lw	$t3, 0($t4)
 	bne	$t3, 1, not_puzzle
-        sw	$0, 0($t4)
+        sw	$t3, 0($t4)
 	move	$a0, $t0 				#a0 = puzzle, a2 = solution
 	la	$a2, solution
 	jal	count_disjoint_regions
@@ -619,7 +619,7 @@ solve_puzzle:
 	la	$t0, puzzle_ready
 	li	$t1, 1
 	sw	$t1, 0($t0)
-    j   interrupt_dispatch
+        j   interrupt_dispatch
 
 non_intrpt:				# was some non-interrupt
 	li	$v0, PRINT_STRING
