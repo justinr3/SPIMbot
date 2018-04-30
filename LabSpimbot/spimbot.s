@@ -62,14 +62,14 @@ PI:	.float	3.141592
 F180:	.float  180.0
 
 lines:          .word   2       start_pos       end_pos
-start_pos:      .word   2       10
-end_pos:        .word   22      14
+start_pos:      .word   2       100
+end_pos:        .word   2       100
 
 canvas: 	.word   0       0       0       canv
-canv:   	.space  1024
+canv:   	.space  2000
 
 solution:       .word   2       counts
-counts:         .space  8
+counts:         .space  16
 
 puzzle:  	.word	canvas	lines	data
 data:		.space	300
