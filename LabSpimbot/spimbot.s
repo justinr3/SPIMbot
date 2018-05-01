@@ -63,7 +63,7 @@ F180:	.float  180.0
 solution:       .word   2       counts
 counts:         .space  16
 
-puzzle:  	.word	1024
+puzzle:  	.word	328
 
 .align 2
 asteroid_map: .space 1024
@@ -96,8 +96,8 @@ main:
 	lw	$t3, 0($t4)
 	bne	$t3, 1, not_frozen
 	sw	$0, 0($t4)
-        la      $t0, puzzle
-        lw      $a0, 0($t0)
+    la      $t0, puzzle
+    move	$a0, $t0
 	jal	solve_unfreeze
 
 not_frozen:
@@ -112,7 +112,8 @@ not_frozen:
 	lw	$t3, 0($t4)
 	bne	$t3, 1, not_puzzle
     sw	$0, 0($t4)
-	add	$a0, $t0, 20				#a0 = lines, a1 = canvas a2 = solution
+    la 	$t0, puzzle
+	add	$a0, $t0, 16			#a0 = lines, a1 = canvas a2 = solution
 	move	$a1, $t0
 	la	$a2, solution
 	jal	count_disjoint_regions
@@ -214,10 +215,9 @@ mainl:
 solve_unfreeze:
         sub	$sp, $sp, 12                                  # allocate 28 byte stack frame
         sw	$ra, 0($sp)
-        sw      $a0, 4($sp)
-        sw      $a1, 8($sp)
-
-		add	$a0, $t0, 64				#a0 = lines, a1 = canvas a2 = solution
+        sw  $a0, 4($sp)
+        sw  $a1, 8($sp)
+		add	$a0, $t0, 16				#a0 = lines, a1 = canvas a2 = solution
 		move	$a1, $t0
 		la	$a2, solution
         jal     count_disjoint_regions
